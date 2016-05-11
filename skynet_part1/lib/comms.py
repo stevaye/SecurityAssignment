@@ -1,6 +1,7 @@
 import struct
 import base64
 
+from Crypto.Hash import SHA256
 from Crypto.Cipher import AES
 from Crypto import Random
 
@@ -17,7 +18,9 @@ class StealthConn(object):
         self.client = client
         self.server = server
         self.verbose = verbose
+        self.key = None
         self.initiate_session()
+        
 
     def initiate_session(self):
         # Perform the initial connection handshake for agreeing on a shared secret
@@ -33,15 +36,19 @@ class StealthConn(object):
             # Obtain our shared secret
             shared_hash = calculate_dh_secret(their_public_key, my_private_key)
             print("Shared hash: {}".format(shared_hash))
-            #key = shared_hash[:16].encode("ascii") #+ get_random_bytes(16)
-            #key = SHA256.new(key).hexdigest()[:16]
+            self.key = shared_hash[:16].encode("ascii")
+            self.key = SHA256.new(self.key).hexdigest()[:16]
+
+            iv = Random.new().read(AES.block_size) #IV is created for every time something is sent, so you cannot predict the outcome of the string
+            self.cipher = "Make it work please!!!!"#AES.new(self.key, AES.MODE_CBC, iv) ###self.key or just key?
 
 
         # Default XOR algorithm can only take a key of length 32
         #self.cipher = XOR.new(shared_hash[:4])
-        key = get_random_bytes(16)
-        iv = shared_hash[:16]
-        self.cipher = AES.new(key, AES.MODE_CBC, iv) ###self.key or just key?
+
+        #key = get_random_bytes(16)
+        #iv = shared_hash[:16]
+        #self.cipher = AES.new(key, AES.MODE_CBC, iv) ###self.key or just key?
 
     def send(self, data):
         #ciper object goes here
@@ -51,13 +58,17 @@ class StealthConn(object):
         #return base64.b64encode(iv + self.cipher.encrypt(data))
         # msg = iv + cipher.encrypt(b'Attack at dawn')
         #data = get_random_bytes(16) + data
-        
+        #iv = Random.new().read(AES.block_size) #IV is created for every time something is sent, so you cannot predict the outcome of the string
+        #self.cipher = AES.new(self.key, AES.MODE_CBC, iv) ###self.key or just key?
         
 
-        if self.cipher:   
-            padded_d = ANSI_X923_pad(data, 16)
+        if self.cipher:
+            iv = Random.new().read(AES.block_size)
+            #self.cipher = AES.new(self.key, AES.MODE_CBC, iv) ###self.key or just key?
+            padded_d = ANSI_X923_pad(data, AES.block_size)
+            self.cipher = AES.new(self.key, AES.MODE_CBC, iv) ###self.key or just key?  
             data = padded_d
-            encrypted_data = self.cipher.encrypt(data)
+            encrypted_data = iv + self.cipher.encrypt(data)
 
             if self.verbose:
                 print("Original data: {}".format(data))
@@ -79,8 +90,10 @@ class StealthConn(object):
 
         encrypted_data = self.conn.recv(pkt_len)
         if self.cipher:
+            iv, encrypted_data = (encrypted_data[:16], encrypted_data[16:]) #Strips the prefixed IV from the encrypted data that is received
+            self.cipher = AES.new(self.key, AES.MODE_CBC, iv) ###self.key or just key?
             data = self.cipher.decrypt(encrypted_data)
-            data = ANSI_X923_unpad(data, 16)
+            data = ANSI_X923_unpad(data, AES.block_size)
             if self.verbose:
                 print("Receiving packet of length {}".format(pkt_len))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
