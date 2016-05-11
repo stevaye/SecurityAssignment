@@ -33,22 +33,30 @@ class StealthConn(object):
             # Obtain our shared secret
             shared_hash = calculate_dh_secret(their_public_key, my_private_key)
             print("Shared hash: {}".format(shared_hash))
+            #key = shared_hash[:16].encode("ascii") #+ get_random_bytes(16)
+            #key = SHA256.new(key).hexdigest()[:16]
+
 
         # Default XOR algorithm can only take a key of length 32
         #self.cipher = XOR.new(shared_hash[:4])
+        key = get_random_bytes(16)
+        iv = shared_hash[:16]
+        self.cipher = AES.new(key, AES.MODE_CBC, iv) ###self.key or just key?
 
     def send(self, data):
         #ciper object goes here
         #data = ANSI_X923_pad(data, pad_length)
-        key = get_random_bytes(16)
-        iv = Random.new().read(16)
-        self.cipher = AES.new(key, AES.MODE_CBC, iv) ###self.key or just key?
+        # AES.block_size = 16
+
         #return base64.b64encode(iv + self.cipher.encrypt(data))
         # msg = iv + cipher.encrypt(b'Attack at dawn')
-        padded_m = ANSI_X923_pad(data, 16)
-        data = padded_m
+        #data = get_random_bytes(16) + data
         
+        
+
         if self.cipher:   
+            padded_d = ANSI_X923_pad(data, 16)
+            data = padded_d
             encrypted_data = self.cipher.encrypt(data)
 
             if self.verbose:
@@ -72,6 +80,7 @@ class StealthConn(object):
         encrypted_data = self.conn.recv(pkt_len)
         if self.cipher:
             data = self.cipher.decrypt(encrypted_data)
+            data = ANSI_X923_unpad(data, 16)
             if self.verbose:
                 print("Receiving packet of length {}".format(pkt_len))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
