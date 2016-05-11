@@ -17,8 +17,7 @@ class StealthConn(object):
         self.client = client
         self.server = server
         self.verbose = verbose
-        self.initiate_session()
-
+        self.initiate_session
     def initiate_session(self):
         # Perform the initial connection handshake for agreeing on a shared secret
 
@@ -39,9 +38,10 @@ class StealthConn(object):
 
         # Default XOR algorithm can only take a key of length 32
         #self.cipher = XOR.new(shared_hash[:4])
-        key = get_random_bytes(16)
-        iv = shared_hash[:16]
-        self.cipher = AES.new(key, AES.MODE_CBC, iv) ###self.key or just key?
+
+        #key = get_random_bytes(16)
+        #iv = shared_hash[:16]
+        #self.cipher = AES.new(key, AES.MODE_CBC, iv) ###self.key or just key?
 
     def send(self, data):
         #ciper object goes here
@@ -52,9 +52,11 @@ class StealthConn(object):
         # msg = iv + cipher.encrypt(b'Attack at dawn')
         #data = get_random_bytes(16) + data
         
-        
 
         if self.cipher:   
+            key = get_random_bytes(16)
+            iv = shared_hash[:16]
+            self.cipher = AES.new(key, AES.MODE_CBC, iv)
             padded_d = ANSI_X923_pad(data, 16)
             data = padded_d
             encrypted_data = self.cipher.encrypt(data)
@@ -77,7 +79,8 @@ class StealthConn(object):
         unpacked_contents = struct.unpack('H', pkt_len_packed)
         pkt_len = unpacked_contents[0]
 
-        encrypted_data = self.conn.recv(pkt_len)
+        #encrypted_data = self.conn.recv(pkt_len)
+        #iv, encrypted_data = (encrypted_data[:16], encrypted_data[:16])
         if self.cipher:
             data = self.cipher.decrypt(encrypted_data)
             data = ANSI_X923_unpad(data, 16)
