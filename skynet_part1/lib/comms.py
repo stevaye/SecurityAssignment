@@ -1,8 +1,14 @@
 import struct
+import base64
 
-from Crypto.Cipher import XOR
+from Crypto.Cipher import AES
+from Crypto import Random
+
+from Crypto.Random import get_random_bytes
+from Crypto import *
 
 from dh import create_dh_key, calculate_dh_secret
+from lib.crypto_utils import ANSI_X923_pad, ANSI_X923_unpad
 
 class StealthConn(object):
     def __init__(self, conn, client=False, server=False, verbose=False):
@@ -29,11 +35,22 @@ class StealthConn(object):
             print("Shared hash: {}".format(shared_hash))
 
         # Default XOR algorithm can only take a key of length 32
-        self.cipher = XOR.new(shared_hash[:4])
+        #self.cipher = XOR.new(shared_hash[:4])
 
     def send(self, data):
-        if self.cipher:
+        #ciper object goes here
+        #data = ANSI_X923_pad(data, pad_length)
+        key = get_random_bytes(16)
+        iv = Random.new().read(16)
+        self.cipher = AES.new(key, AES.MODE_CBC, iv) ###self.key or just key?
+        #return base64.b64encode(iv + self.cipher.encrypt(data))
+        # msg = iv + cipher.encrypt(b'Attack at dawn')
+        padded_m = ANSI_X923_pad(data, 16)
+        data = padded_m
+        
+        if self.cipher:   
             encrypted_data = self.cipher.encrypt(data)
+
             if self.verbose:
                 print("Original data: {}".format(data))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
@@ -46,7 +63,7 @@ class StealthConn(object):
         self.conn.sendall(pkt_len)
         self.conn.sendall(encrypted_data)
 
-    def recv(self):
+    def recv(self): #recieve strips the IV off either the end or front of the encrypted message (IV is 16 bits)
         # Decode the data's length from an unsigned two byte int ('H')
         pkt_len_packed = self.conn.recv(struct.calcsize('H'))
         unpacked_contents = struct.unpack('H', pkt_len_packed)
