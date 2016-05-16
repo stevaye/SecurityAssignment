@@ -1,6 +1,7 @@
 import struct
 import base64
 
+from Crypto.Hash import HMAC
 from Crypto.Hash import SHA256
 from Crypto.Cipher import AES
 from Crypto import Random
@@ -62,15 +63,23 @@ class StealthConn(object):
 
 
         if self.cipher:
-            #self.iv = self.shared_hash[:16]
-            #self.iv = Random.new().read(AES.block_size)
-            #print("SELF.IV in SEND (First time it's been created): " + str(self.iv))
+            #Secret is the last 32 bytes of the shared hash
+            secret = self.shared_hash[32:].encode("ascii")
+            #Create the HMAC
+            h = HMAC.new(secret, digestmod=SHA256)
+            print("HMAC in SEND is: ", h.hexdigest())
+            #Give the HMAC the data
+            h.update(data)
+            #Appends the HMAC digest to the data
+            dataHMAC = bytes(h.hexdigest() + data.decode("ascii"), "ascii")
+            #print(dataHMAC)
+
             self.iv = Random.get_random_bytes(16)
             self.cipher = AES.new(self.key, AES.MODE_CBC, self.iv) ###self.key or just key? 
-            padded_d = ANSI_X923_pad(data, AES.block_size)
+            padded_d = ANSI_X923_pad(dataHMAC, AES.block_size)
             encrypted_data = self.iv + self.cipher.encrypt(padded_d)
             print("SELF.IV in SEND (After encrypted_data = self.iv + self.cipher.encrypt(data)) is: " + str(self.iv))
-
+            #print("HMAC in SEND is: " + h.hexdigest())
             if self.verbose:
                 print("Original data: {}".format(data))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
@@ -91,10 +100,41 @@ class StealthConn(object):
 
         encrypted_data = self.conn.recv(pkt_len)
         if self.cipher:
-            self.iv, encrypted_data = (encrypted_data[:16], encrypted_data[16:]) #Strips the prefixed IV from the encrypted data that is received
-            self.cipher = AES.new(self.key, AES.MODE_CBC, self.iv) ###self.key or just key?
+
+            
+            secret = self.shared_hash[32:].encode("ascii")
+            #IV is stripped off the first 16 of the encrypted data
+            self.iv = encrypted_data[:16]
+            #Encrypted data is stripped off the rest of the block size
+            encrypted_data = encrypted_data[AES.block_size:]
+            #Creates the cipher object 
+            self.cipher = AES.new(self.key, AES.MODE_CBC, self.iv)
+            #Decrypts the data with the HMAC and padded data
             data = self.cipher.decrypt(encrypted_data)
+            #Unpads the data that will give us the HMAC data
             data = ANSI_X923_unpad(data, AES.block_size)
+            #Create the HMAC so we can compare it to the one we sent
+            h2 = HMAC.new(secret, digestmod=SHA256)
+            print("This is 'h2' in RECV: ", h2.hexdigest())
+            #Give the HMAC the data
+            h2.update(data)
+
+            #Extract the HMAC
+            hmac = data[:h2.digest_size * 2]
+            data = data[h2.digest_size* 2:]
+
+            #print("HMAC in RECV is: " + str(hmac, "ascii"))
+            #Test the HMAC. If it doesnt match - print an error
+            #if compare_digest(h.hexdigest, hmac) != True:
+            if h2.hexdigest() == str(hmac, "ascii"):
+                print ("HMAC matches!")
+                print ("HMAC in SEND: ",h2.hexdigest())
+                print ("HMAC in RECV: ",str(hmac,"ascii"))
+            else:
+                print("HMAC doesnt match!")
+                print("HMAC in SEND: ",h2.hexdigest())
+                print("HMAC in RECV: ",str(hmac, "ascii"))
+
             if self.verbose:
                 print("Receiving packet of length {}".format(pkt_len))
                 print("Encrypted data: {}".format(repr(encrypted_data)))
