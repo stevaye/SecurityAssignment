@@ -90,10 +90,14 @@ def create_dh_key():
     # Creates a Diffie-Hellman key
     # Returns (public, private)
     p = prime - 1
-    p2 = prime2 - 1 #Using a second prime instead of 0 as part of the range for the random integer so that we can guarantee a large number that is cryptographically secure.
-    private = random.randint(p2, int(p)) #Control of key length
+    p2 = prime2 - 1 
+    # Using a second prime instead of 0 as part of the range for the random integer so that we can guarantee a large number that is cryptographically secure.
+    private = random.randint(p2, int(p)) 
+    # Returns a random int that is greater than or equal to p2 and less than or equal to p
     public = pow(2, private, prime)
+    # Returns 2^private, modulo prime and assigns it to public
     return (private, public)
+    # Returns private and public
 
 def calculate_dh_secret(their_public, my_private):
     # Calculate the shared secret
